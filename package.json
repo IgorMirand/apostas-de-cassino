@@ -6,10 +6,14 @@
   "scripts": {
     "typecheck": "bun check",
     "start": "bun run src/main.ts",
-    "dev": "bun --watch src/main.ts"
+    "dev": "bun --watch src/main.ts",
+    "db:up": "bun run src/infra/migrate.ts up",
+    "db:down": "bun run src/infra/migrate.ts down",
+    "db:status": "bun run src/infra/migrate.ts status"
   },
   "devDependencies": {
     "@mikro-orm/cli": "^7.2.7",
+    "@nestjs/cli": "^12.0.11",
     "@types/bun": "latest",
     "@types/node": "^26.6.6",
     "bun-types": "^1.4.4",
@@ -20,6 +24,7 @@
   },
   "dependencies": {
     "@mikro-orm/core": "^7.2.7",
+    "@mikro-orm/decorators": "^7.2.7",
     "@mikro-orm/migrations": "^7.2.7",
     "@mikro-orm/nestjs": "^7.1.0",
     "@mikro-orm/postgresql": "^7.2.7",

@@ -9,7 +9,9 @@
     "dev": "bun --watch src/main.ts",
     "db:up": "bun run src/infra/migrate.ts up",
     "db:down": "bun run src/infra/migrate.ts down",
-    "db:status": "bun run src/infra/migrate.ts status"
+    "db:status": "bun run src/infra/migrate.ts status",
+    "test:unit": "bun test test/money.test.ts",
+    "test:integration": "bun test test/concurrency.test.ts"
   },
   "devDependencies": {
     "@mikro-orm/cli": "^7.2.7",

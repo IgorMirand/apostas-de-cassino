@@ -1,6 +1,7 @@
 import { defineConfig } from '@mikro-orm/postgresql';
 import { Migrator } from '@mikro-orm/migrations';
 import { Migration20261105000001_init } from './migrations/Migration20261105000001_init';
+import { Migration20261105000002_observed_balance } from './migrations/Migration20261105000002_observed_balance';
 import { schemas } from './persistence/schemas';
 
 export default defineConfig({
@@ -14,7 +15,9 @@ export default defineConfig({
   migrations: {
     migrationsList: [
       { name: 'Migration20261105000001_init', class: Migration20261105000001_init },
+      { name: 'Migration20261105000002_observed_balance', class: Migration20261105000002_observed_balance },
     ],
+    snapshot: false,
     transactional: true,
     allOrNothing: true,
   },

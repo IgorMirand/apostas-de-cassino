@@ -158,6 +158,29 @@ describe('transições', () => {
   });
 });
 
+describe('saldo observado (base do replay idempotente)', () => {
+  test('nasce sem saldo observado', () => {
+    expect(makeTx().observedBalance).toBeUndefined();
+  });
+
+  test('markProcessed e reject registram o saldo observado', () => {
+    const processed = makeTx();
+    processed.markProcessed(undefined, T1, brl('20.00'));
+    expect(processed.observedBalance?.toJSON()).toEqual({ amount: '20.00', currency: 'BRL' });
+
+    const rejected = makeTx({ id: 'tx-2' });
+    rejected.reject(FailureCode.InsufficientFunds, brl('20.00'));
+    expect(rejected.observedBalance?.toJSON()).toEqual({ amount: '20.00', currency: 'BRL' });
+  });
+
+  test('o saldo observado pode ter moeda diferente da transação (rejeição por moeda)', () => {
+    const tx = makeTx({ currency: 'USD' });
+    tx.reject(FailureCode.CurrencyMismatch, brl('100.00'));
+    expect(tx.money.currency).toBe('USD');
+    expect(tx.observedBalance?.currency).toBe('BRL');
+  });
+});
+
 describe('rehydrate', () => {
   test('não revalida transições: reconstrói um estado terminal como está', () => {
     const tx = WagerTransaction.rehydrate({

@@ -71,6 +71,8 @@ export interface WagerTransactionState {
   processedAt?: Date;
   pendingAttempts: number;
   pendingNextAttemptAt?: Date;
+  /** saldo da wallet observado quando a transação chegou a PROCESSED/REJECTED (para o replay) */
+  observedBalance?: Money;
 }
 
 /**
@@ -107,6 +109,7 @@ export class WagerTransaction {
   private _processedAt: Date | undefined;
   private _pendingAttempts: number;
   private _pendingNextAttemptAt: Date | undefined;
+  private _observedBalance: Money | undefined;
 
   private constructor(s: WagerTransactionState) {
     this.id = s.id;
@@ -128,6 +131,7 @@ export class WagerTransaction {
     this._processedAt = s.processedAt;
     this._pendingAttempts = s.pendingAttempts;
     this._pendingNextAttemptAt = s.pendingNextAttemptAt;
+    this._observedBalance = s.observedBalance;
   }
 
   /** Nasce PENDING. Valida o que é estático (referência por kind, valor, OPENING proibido). */
@@ -194,10 +198,12 @@ export class WagerTransaction {
   get processedAt(): Date | undefined { return this._processedAt; }
   get pendingAttempts(): number { return this._pendingAttempts; }
   get pendingNextAttemptAt(): Date | undefined { return this._pendingNextAttemptAt; }
+  /** Saldo da wallet no instante em que esta transação foi decidida. Base do replay idempotente. */
+  get observedBalance(): Money | undefined { return this._observedBalance; }
 
   // ------------------------------------------------------------ transições
 
-  markProcessed(referenceTransactionId: string | undefined, at: Date): void {
+  markProcessed(referenceTransactionId: string | undefined, at: Date, observedBalance?: Money): void {
     this.assertOpen('markProcessed');
     if (this.requiresReference() && referenceTransactionId === undefined) {
       throw new InvalidTransactionError(`${this.kind} cannot be processed without its resolved reference`);
@@ -210,6 +216,7 @@ export class WagerTransaction {
     this._processedAt = at;
     this._failureCode = undefined;
     this._pendingNextAttemptAt = undefined;
+    this._observedBalance = observedBalance;
   }
 
   /** Cada chamada conta uma tentativa de resolver a referência. Política (limite, backoff) é da aplicação. */
@@ -224,11 +231,12 @@ export class WagerTransaction {
   }
 
   /** Violação de regra de negócio. Terminal e auditável. */
-  reject(code: FailureCode): void {
+  reject(code: FailureCode, observedBalance?: Money): void {
     this.assertOpen('reject');
     this._status = WagerTransactionStatus.Rejected;
     this._failureCode = code;
     this._pendingNextAttemptAt = undefined;
+    this._observedBalance = observedBalance;
   }
 
   /** Erro permanente de infraestrutura. Terminal e auditável. */

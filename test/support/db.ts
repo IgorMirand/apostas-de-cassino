@@ -1,6 +1,11 @@
 import { SQL } from 'bun';
 
 /**
+ * ATENÇÃO: este módulo é um singleton compartilhado por TODOS os arquivos de teste
+ * do mesmo processo. Nenhum teste deve chamar `db.close()`: fechar o pool aqui
+ * quebra qualquer arquivo que rode depois ("Connection closed"). O processo do
+ * `bun test` encerra as conexões ao terminar.
+ *
  * Conexão direta ao banco, só para ASSERTIVAS independentes da API.
  * O teste não confia na aplicação para dizer se a aplicação está certa.
  */

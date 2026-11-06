@@ -35,6 +35,8 @@ export class WagerTransactionRecord {
   processedAt!: Date | null;
   pendingAttempts!: number;
   pendingNextAttemptAt!: Date | null;
+  observedBalance!: string | null;
+  observedCurrency!: string | null;
 }
 
 export class WalletLedgerEntryRecord {

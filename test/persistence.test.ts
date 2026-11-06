@@ -22,7 +22,7 @@ import { brl, T0, T1 } from './support/builders';
  */
 let orm: MikroORM;
 beforeAll(async () => { orm = await MikroORM.init(config); });
-afterAll(async () => { await orm.close(); await db.close(); });
+afterAll(async () => { await orm.close(); }); // NÃO feche `db`: o pool é compartilhado entre arquivos
 
 const fresh = () => orm.em.fork(); // EntityManager limpo = nenhum Identity Map reaproveitado
 
@@ -163,6 +163,19 @@ describe('WagerTransaction', () => {
     const loaded = await load(tx.id);
     expect(loaded.status).toBe(S.Processed);
     expect(loaded.processedAt?.getTime()).toBe(T1.getTime());
+  });
+
+  test('saldo observado faz round-trip exato, inclusive com moeda diferente da transação', async () => {
+    const w = await saveWallet('100.00');
+    const tx = newTx(w.id, w.playerId);
+    tx.reject(FailureCode.CurrencyMismatch, brl('12345678901234567.89'));
+    await save(tx);
+    const loaded = await load(tx.id);
+    expect(loaded.observedBalance?.toJSON()).toEqual({ amount: '12345678901234567.89', currency: 'BRL' });
+
+    const pending = newTx(w.id, w.playerId); // sem saldo observado: volta undefined
+    await save(pending);
+    expect((await load(pending.id)).observedBalance).toBeUndefined();
   });
 
   test('OPENING: sem rodada nem jogo (colunas NULL) persiste e volta', async () => {

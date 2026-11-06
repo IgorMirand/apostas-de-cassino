@@ -70,6 +70,10 @@ export function transactionToDomain(r: WagerTransactionRecord): WagerTransaction
     processedAt: orUndefined(r.processedAt),
     pendingAttempts: r.pendingAttempts,
     pendingNextAttemptAt: orUndefined(r.pendingNextAttemptAt),
+    observedBalance:
+      r.observedBalance === null || r.observedCurrency === null
+        ? undefined
+        : money(r.observedBalance, r.observedCurrency),
   });
 }
 
@@ -81,6 +85,8 @@ export function applyTransactionToRecord(tx: WagerTransaction, record: WagerTran
   record.processedAt = tx.processedAt ?? null;
   record.pendingAttempts = tx.pendingAttempts;
   record.pendingNextAttemptAt = tx.pendingNextAttemptAt ?? null;
+  record.observedBalance = tx.observedBalance ? amountOf(tx.observedBalance) : null;
+  record.observedCurrency = tx.observedBalance ? tx.observedBalance.currency : null;
 }
 
 export function transactionToNewRecord(tx: WagerTransaction): WagerTransactionRecord {

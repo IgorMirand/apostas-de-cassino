@@ -50,6 +50,8 @@ export const WagerTransactionSchema = new EntitySchema<WagerTransactionRecord>({
     processedAt: { ...timestamptz, fieldName: 'processed_at', nullable: true },
     pendingAttempts: { type: 'integer', fieldName: 'pending_attempts' },
     pendingNextAttemptAt: { ...timestamptz, fieldName: 'pending_next_attempt_at', nullable: true },
+    observedBalance: { ...money, fieldName: 'observed_balance', nullable: true },
+    observedCurrency: { type: 'string', columnType: 'char(3)', fieldName: 'observed_currency', nullable: true },
   },
 });
 

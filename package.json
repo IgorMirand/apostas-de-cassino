@@ -10,8 +10,8 @@
     "db:up": "bun run src/infra/migrate.ts up",
     "db:down": "bun run src/infra/migrate.ts down",
     "db:status": "bun run src/infra/migrate.ts status",
-    "test:unit": "bun test test/money.test.ts",
-    "test:integration": "bun test test/concurrency.test.ts"
+    "test:unit": "bun test test/money.test.ts test/wallet.test.ts test/wallet-ledger-entry.test.ts test/wager-transaction.test.ts",
+    "test:integration": "bun test test/persistence.test.ts test/concurrency.test.ts"
   },
   "devDependencies": {
     "@mikro-orm/cli": "^7.2.7",

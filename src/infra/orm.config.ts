@@ -1,6 +1,7 @@
 import { defineConfig } from '@mikro-orm/postgresql';
 import { Migrator } from '@mikro-orm/migrations';
 import { Migration20261105000001_init } from './migrations/Migration20261105000001_init';
+import { schemas } from './persistence/schemas';
 
 export default defineConfig({
   host: process.env.DB_HOST ?? 'localhost',
@@ -8,8 +9,7 @@ export default defineConfig({
   user: process.env.DB_USER ?? 'app',
   password: process.env.DB_PASSWORD ?? 'app',
   dbName: process.env.DB_NAME ?? 'wagering',
-  entities: [],
-  discovery: { warnWhenNoEntities: false },
+  entities: schemas,
   extensions: [Migrator],
   migrations: {
     migrationsList: [

@@ -1,4 +1,4 @@
-import { LockMode } from '@mikro-orm/core';
+import { LockMode, UniqueConstraintViolationException } from '@mikro-orm/core';
 import type { EntityManager, MikroORM } from '@mikro-orm/postgresql';
 import type {
   LedgerRepository, Repositories, UnitOfWork, WagerTransactionRepository, WalletRepository,
@@ -6,6 +6,7 @@ import type {
 import type { Wallet } from '../../domain/wallet';
 import type { WalletLedgerEntry } from '../../domain/wallet-ledger-entry';
 import { WagerTransaction, WagerTransactionKind, WagerTransactionStatus } from '../../domain/wager-transaction';
+import { WalletAlreadyExistsError } from '../../application/errors';
 import { WalletNotLockedError } from './errors';
 import {
   applyTransactionToRecord, applyWalletToRecord, ledgerEntryToNewRecord, transactionToDomain,
@@ -28,7 +29,15 @@ export class MikroOrmWalletRepository implements WalletRepository {
   constructor(private readonly em: EntityManager) {}
 
   async insert(wallet: Wallet): Promise<void> {
-    await this.em.insert(WalletRecord, { ...walletToNewRecord(wallet) });
+    try {
+      await this.em.insert(WalletRecord, { ...walletToNewRecord(wallet) });
+    } catch (e) {
+      // a unicidade (player_id, currency) é do BANCO; aqui só se traduz a violação em erro da aplicação
+      if (e instanceof UniqueConstraintViolationException && String(e.message).includes('wallets_player_currency_uq')) {
+        throw new WalletAlreadyExistsError(wallet.playerId, wallet.currency);
+      }
+      throw e;
+    }
   }
 
   async findById(id: string): Promise<Wallet | null> {

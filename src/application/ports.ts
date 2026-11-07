@@ -13,7 +13,10 @@ import type { WagerTransaction } from '../domain/wager-transaction';
  * (19 de 20 transações em teste). Travar-primeiro serializa limpo.
  */
 export interface WalletRepository {
-  /** Insere imediatamente (dentro da transação corrente). */
+  /**
+   * Insere imediatamente (dentro da transação corrente).
+   * Lança WalletAlreadyExistsError se já existe wallet para (playerId, moeda).
+   */
   insert(wallet: Wallet): Promise<void>;
 
   /** Leitura sem lock, para consultas. Não use para alterar saldo. */
@@ -67,4 +70,14 @@ export interface Repositories {
 /** Executa `work` numa única transação de banco: commit se resolver, rollback se lançar. */
 export interface UnitOfWork {
   run<T>(work: (repos: Repositories) => Promise<T>): Promise<T>;
+}
+
+/** Relógio injetável: o domínio e os use cases nunca chamam `new Date()` diretamente. */
+export interface Clock {
+  now(): Date;
+}
+
+/** Gerador de ids (UUIDv7 em produção). O domínio nunca gera ids. */
+export interface IdGenerator {
+  next(): string;
 }

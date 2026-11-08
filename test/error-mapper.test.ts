@@ -3,7 +3,7 @@ import { BadRequestException, NotFoundException, HttpException } from '@nestjs/c
 import { ConnectionException, DeadlockException, LockWaitTimeoutException } from '@mikro-orm/core';
 import { mapError } from '../src/http/error-mapper';
 import {
-  IdempotencyConflictError, InvalidRequestError, InvariantViolationError, UnsupportedTransactionKindError,
+  IdempotencyConflictError, InvalidRequestError, InvariantViolationError,
   WalletAlreadyExistsError, WalletNotFoundError,
 } from '../src/application/errors';
 import { InvalidMoneyError, InvalidTransactionError, InsufficientFundsError } from '../src/domain/errors';
@@ -18,7 +18,6 @@ describe('mapError: erros do cliente', () => {
     ['WalletNotFoundError', new WalletNotFoundError('w'), 404, 'WALLET_NOT_FOUND'],
     ['WalletAlreadyExistsError', new WalletAlreadyExistsError('p', 'BRL'), 409, 'WALLET_ALREADY_EXISTS'],
     ['IdempotencyConflictError', new IdempotencyConflictError('x'), 409, 'IDEMPOTENCY_CONFLICT'],
-    ['UnsupportedTransactionKindError', new UnsupportedTransactionKindError('REFUND'), 501, 'UNSUPPORTED_TRANSACTION_KIND'],
   ])('%s', (_name, error, status, code) => {
     const mapped = mapError(error);
     expect(mapped.status).toBe(status);

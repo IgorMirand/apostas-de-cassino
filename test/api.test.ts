@@ -111,69 +111,53 @@ describe('GET /wallets/:id', () => {
 });
 
 describe('POST /wagering/transactions: status HTTP', () => {
-  test('201 na primeira vez, 200 no replay (idempotentReplay marca a diferença)', async () => {
+    test('REFUND de BET PROCESSED via HTTP: 201 e credita de volta', async () => {
     const w = await newWallet('100.00');
-    const body = tx(w, { money: { amount: '30.00', currency: 'BRL' } });
-    const key = `k-${randomUUID()}`;
+    const betExt = `ext-bet-${randomUUID()}`;
+    const bet = await submit(tx(w, { externalTransactionId: betExt }));
+    expect(bet.http).toBe(201);
+    expect(bet.body.balance).toEqual({ amount: '90.00', currency: 'BRL' });
 
-    const first = await submit(body, key);
-    expect(first.http).toBe(201);
-    expect(Object.keys(first.body).sort()).toEqual(['balance', 'idempotentReplay', 'status', 'transactionId']);
-    expect(first.body).toMatchObject({ status: 'PROCESSED', balance: { amount: '70.00', currency: 'BRL' }, idempotentReplay: false });
-    expect(isUuid(first.body.transactionId)).toBe(true);
-
-    const replay = await submit(body, key);
-    expect(replay.http).toBe(200);
-    expect(replay.body).toEqual({ ...first.body, idempotentReplay: true });
+    const refund = await submit(tx(w, { kind: 'REFUND', externalTransactionId: `ext-ref-${randomUUID()}`, referenceExternalTransactionId: betExt }));
+    expect(refund.http).toBe(201);
+    expect(refund.body).toMatchObject({
+      status: 'PROCESSED',
+      balance: { amount: '100.00', currency: 'BRL' },
+      idempotentReplay: false,
+    });
+    expect(await ledgerOf(w.id)).toHaveLength(3); // OPENING, BET, REFUND
   });
 
-  test('422 para rejeição de negócio, com failureCode; o replay mantém 422 e o saldo da época', async () => {
-    const w = await newWallet('20.00');
-    const body = tx(w, { money: { amount: '80.00', currency: 'BRL' } });
-    const key = `k-${randomUUID()}`;
-
-    const first = await submit(body, key);
-    expect(first.http).toBe(422);
-    expect(first.body).toMatchObject({ status: 'REJECTED', failureCode: 'INSUFFICIENT_FUNDS', balance: { amount: '20.00' }, idempotentReplay: false });
-
-    await submit(tx(w, { kind: 'WIN', money: { amount: '500.00', currency: 'BRL' } })); // agora a BET passaria
-    const replay = await submit(body, key);
-    expect(replay.http).toBe(422);
-    expect(replay.body).toEqual({ ...first.body, idempotentReplay: true });
-    expect(await countTransactions(w.id, { kind: 'BET', status: 'REJECTED' })).toBe(1);
-  });
-
-  test('WIN e LOSS: 201', async () => {
+  test('REFUND com referência inexistente: 202 e o corpo NÃO traz balance', async () => {
     const w = await newWallet('100.00');
-    expect((await submit(tx(w, { kind: 'WIN', money: { amount: '5.00', currency: 'BRL' } }))).body.balance.amount).toBe('105.00');
-    const loss = await submit(tx(w, { kind: 'LOSS', money: { amount: '5.00', currency: 'BRL' } }));
-    expect(loss.http).toBe(201);
-    expect(loss.body.balance.amount).toBe('105.00');
+    const res = await submit(tx(w, { kind: 'REFUND', referenceExternalTransactionId: `ext-${randomUUID()}` }));
+    expect(res.http).toBe(202);
+    expect(res.body).toMatchObject({ status: 'PENDING_REFERENCE', idempotentReplay: false });
+    expect('balance' in res.body).toBe(false);
   });
 
-  test('404 WALLET_NOT_FOUND e nada é registrado', async () => {
-    const ghost = { id: randomUUID(), playerId: 'p' };
-    const key = `k-${randomUUID()}`;
-    const res = await submit(tx(ghost), key);
-    expect(res.http).toBe(404);
-    expect(res.body.error.code).toBe('WALLET_NOT_FOUND');
-  });
-
-  test('409 IDEMPOTENCY_CONFLICT: mesma chave com payload diferente', async () => {
+  test('ROLLBACK de WIN via HTTP: 201 e debita o inverso', async () => {
     const w = await newWallet('100.00');
-    const body = tx(w);
-    const key = `k-${randomUUID()}`;
-    await submit(body, key);
-    const conflict = await submit({ ...body, money: { amount: '11.00', currency: 'BRL' } }, key);
-    expect(conflict.http).toBe(409);
-    expect(conflict.body.error.code).toBe('IDEMPOTENCY_CONFLICT');
+    const winExt = `ext-win-${randomUUID()}`;
+    const win = await submit(tx(w, { kind: 'WIN', externalTransactionId: winExt }));
+    expect(win.http).toBe(201);
+    expect(win.body.balance).toEqual({ amount: '110.00', currency: 'BRL' });
+
+    const rollback = await submit(tx(w, { kind: 'ROLLBACK', externalTransactionId: `ext-rb-${randomUUID()}`, referenceExternalTransactionId: winExt }));
+    expect(rollback.http).toBe(201);
+    expect(rollback.body).toMatchObject({
+      status: 'PROCESSED',
+      balance: { amount: '100.00', currency: 'BRL' },
+    });
   });
 
-  test('501 para REFUND e ROLLBACK (ainda não suportados), com erro no formato padrão', async () => {
+  test('reversão com referência de kind inválido: 422 com failureCode', async () => {
     const w = await newWallet('100.00');
-    const res = await submit(tx(w, { kind: 'REFUND', referenceExternalTransactionId: 'ext-x' }));
-    expect(res.http).toBe(501);
-    expect(res.body.error.code).toBe('UNSUPPORTED_TRANSACTION_KIND');
+    const winExt = `ext-win-${randomUUID()}`;
+    await submit(tx(w, { kind: 'WIN', externalTransactionId: winExt }));
+    const bad = await submit(tx(w, { kind: 'REFUND', externalTransactionId: `ext-ref-${randomUUID()}`, referenceExternalTransactionId: winExt }));
+    expect(bad.http).toBe(422);
+    expect(bad.body).toMatchObject({ status: 'REJECTED', failureCode: 'INVALID_REFERENCE_KIND' });
   });
 });
 

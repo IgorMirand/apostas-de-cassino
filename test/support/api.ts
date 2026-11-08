@@ -14,8 +14,9 @@ export interface BetInput {
   externalTransactionId?: string;
   idempotencyKey?: string;
   roundId?: string;
-  kind?: 'BET' | 'WIN' | 'LOSS';
+  kind?: 'BET' | 'WIN' | 'LOSS' | 'REFUND' | 'ROLLBACK';
   currency?: string;
+  referenceExternalTransactionId?: string;
 }
 
 export const PROVIDER_ID = 'provider-test';

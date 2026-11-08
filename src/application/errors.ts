@@ -39,15 +39,6 @@ export class IdempotencyConflictError extends ApplicationError {
   readonly code = 'IDEMPOTENCY_CONFLICT';
 }
 
-/** Tipo de transação ainda não suportado por este use case. */
-export class UnsupportedTransactionKindError extends ApplicationError {
-  readonly code = 'UNSUPPORTED_TRANSACTION_KIND';
-
-  constructor(kind: string) {
-    super(`transaction kind ${kind} is not supported yet`);
-  }
-}
-
 /** Estado que NUNCA deveria existir. É bug ou corrupção, não regra de negócio. */
 export class InvariantViolationError extends ApplicationError {
   readonly code = 'INVARIANT_VIOLATION';

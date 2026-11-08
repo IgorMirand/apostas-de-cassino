@@ -1,18 +1,22 @@
 import { LockMode, UniqueConstraintViolationException } from '@mikro-orm/core';
 import type { EntityManager, MikroORM } from '@mikro-orm/postgresql';
 import type {
-  LedgerRepository, Repositories, UnitOfWork, WagerTransactionRepository, WalletRepository,
+  LedgerRepository, Repositories, UnitOfWork, WagerTransactionRepository, WalletRepository, OutboxRepository
 } from '../../application/ports';
 import type { Wallet } from '../../domain/wallet';
 import type { WalletLedgerEntry } from '../../domain/wallet-ledger-entry';
 import { WagerTransaction, WagerTransactionKind, WagerTransactionStatus } from '../../domain/wager-transaction';
-import { WalletAlreadyExistsError } from '../../application/errors';
+import { InvariantViolationError, WalletAlreadyExistsError } from '../../application/errors';
 import { WalletNotLockedError } from './errors';
 import {
-  applyTransactionToRecord, applyWalletToRecord, ledgerEntryToNewRecord, transactionToDomain,
-  transactionToNewRecord, walletToDomain, walletToNewRecord,
+  applyOutboxToRecord, applyTransactionToRecord, applyWalletToRecord, ledgerEntryToNewRecord,
+  outboxToDomain, outboxToNewRecord, transactionToDomain, transactionToNewRecord,
+  walletToDomain, walletToNewRecord,
 } from './mappers';
-import { WagerTransactionRecord, WalletLedgerEntryRecord, WalletRecord } from './records';
+import { WagerTransactionRecord, WalletLedgerEntryRecord, WalletRecord, OutboxMessageRecord } from './records';
+import type { OutboxMessage } from '../../domain/outbox-message';
+
+
 
 /**
  * Convenção de escrita desta camada:
@@ -74,6 +78,15 @@ export class MikroOrmWagerTransactionRepository implements WagerTransactionRepos
       .execute();
     return result.affectedRows === 1;
   }
+  
+  async findDuePendingReference(now: Date, limit: number) {
+    const records = await this.em.find(
+      WagerTransactionRecord,
+      { status: WagerTransactionStatus.PendingReference, pendingNextAttemptAt: { $lte: now } },
+      { orderBy: { pendingNextAttemptAt: 'asc' }, limit },
+    );
+    return records.map((r) => ({ id: r.id, walletId: r.walletId }));
+  }
 
   findById(id: string) {
     return this.find({ id });
@@ -118,11 +131,43 @@ export class MikroOrmLedgerRepository implements LedgerRepository {
   }
 }
 
+export class MikroOrmOutboxRepository implements OutboxRepository {
+  /** Mensagens obtidas por claimDue NESTA transação: só elas podem ser salvas. */
+  private readonly claimed = new Map<string, OutboxMessageRecord>();
+
+  constructor(private readonly em: EntityManager) {}
+
+  async add(message: OutboxMessage): Promise<void> {
+    await this.em.insert(OutboxMessageRecord, { ...outboxToNewRecord(message) });
+  }
+
+  async claimDue(now: Date, limit: number): Promise<OutboxMessage[]> {
+    const records = await this.em.find(
+      OutboxMessageRecord,
+      { publishedAt: null, nextAttemptAt: { $lte: now } },
+      {
+        orderBy: { nextAttemptAt: 'asc', occurredAt: 'asc' }, // casa com outbox_pending_idx
+        limit,
+        lockMode: LockMode.PESSIMISTIC_PARTIAL_WRITE,
+      },
+    );
+    for (const r of records) this.claimed.set(r.id, r);
+    return records.map(outboxToDomain);
+  }
+
+  save(message: OutboxMessage): void {
+    const record = this.claimed.get(message.id);
+    if (!record) throw new InvariantViolationError(`outbox message ${message.id} was not claimed in this transaction`);
+    applyOutboxToRecord(message, record);
+  }
+}
+
 export function createRepositories(em: EntityManager): Repositories {
   return {
     wallets: new MikroOrmWalletRepository(em),
     transactions: new MikroOrmWagerTransactionRepository(em),
     ledger: new MikroOrmLedgerRepository(em),
+    outbox: new MikroOrmOutboxRepository(em),
   };
 }
 
@@ -137,3 +182,4 @@ export class MikroOrmUnitOfWork implements UnitOfWork {
     return this.orm.em.transactional((em) => work(createRepositories(em)));
   }
 }
+

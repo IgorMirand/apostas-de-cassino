@@ -1,5 +1,5 @@
 import { EntitySchema } from '@mikro-orm/core';
-import { WagerTransactionRecord, WalletLedgerEntryRecord, WalletRecord } from './records';
+import { OutboxMessageRecord, WagerTransactionRecord, WalletLedgerEntryRecord, WalletRecord } from './records';
 
 /**
  * Mapeamento SEM decorators: o MikroORM é um detalhe de infraestrutura.
@@ -71,4 +71,19 @@ export const WalletLedgerEntrySchema = new EntitySchema<WalletLedgerEntryRecord>
   },
 });
 
-export const schemas = [WalletSchema, WagerTransactionSchema, WalletLedgerEntrySchema];
+export const OutboxMessageSchema = new EntitySchema<OutboxMessageRecord>({
+  class: OutboxMessageRecord,
+  tableName: 'outbox_messages',
+  properties: {
+    id: { type: 'uuid', primary: true },
+    aggregateId: { type: 'uuid', fieldName: 'aggregate_id' },
+    eventType: { ...text, fieldName: 'event_type' },
+    payload: { type: 'json', columnType: 'jsonb' },
+    occurredAt: { ...timestamptz, fieldName: 'occurred_at' },
+    attempts: { type: 'integer' },
+    nextAttemptAt: { ...timestamptz, fieldName: 'next_attempt_at' },
+    publishedAt: { ...timestamptz, fieldName: 'published_at', nullable: true },
+  },
+});
+
+export const schemas = [WalletSchema, WagerTransactionSchema, WalletLedgerEntrySchema, OutboxMessageSchema];

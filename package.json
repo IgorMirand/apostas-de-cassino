@@ -10,9 +10,12 @@
     "db:up": "bun run src/infra/migrate.ts up",
     "db:down": "bun run src/infra/migrate.ts down",
     "db:status": "bun run src/infra/migrate.ts status",
-    "test:unit": "bun test test/money.test.ts test/wallet.test.ts test/wallet-ledger-entry.test.ts test/wager-transaction.test.ts test/payload-hash.test.ts test/commands.test.ts test/error-mapper.test.ts",
+    "test:unit": "bun test test/money.test.ts test/wallet.test.ts test/wallet-ledger-entry.test.ts test/wager-transaction.test.ts test/payload-hash.test.ts test/commands.test.ts test/error-mapper.test.ts test/integration-events.test.ts test/outbox-message.test.ts",
     "test:integration": "bun test test/persistence.test.ts test/repositories.test.ts test/use-cases.test.ts",
-    "test:e2e": "bun test test/concurrency.test.ts test/api.test.ts"
+    "test:e2e": "bun test test/concurrency.test.ts test/api.test.ts",
+    "test:outbox": "bun test test/outbox-events.test.ts",
+    "test:relay": "bun test test/outbox-relay.test.ts",
+    "test:reversals": "bun test test/reversals.test.ts"
   },
   "devDependencies": {
     "@mikro-orm/cli": "^7.2.7",

@@ -1,6 +1,7 @@
 import type { Wallet } from '../domain/wallet';
 import type { WalletLedgerEntry } from '../domain/wallet-ledger-entry';
 import type { WagerTransaction } from '../domain/wager-transaction';
+import type { OutboxMessage } from '../domain/outbox-message';
 
 /**
  * Portas de saída da camada de aplicação. O use case depende SÓ destas interfaces;
@@ -48,6 +49,9 @@ export interface WagerTransactionRepository {
   findById(id: string): Promise<WagerTransaction | null>;
   findByIdempotencyKey(providerId: string, idempotencyKey: string): Promise<WagerTransaction | null>;
   findByExternalId(providerId: string, externalTransactionId: string): Promise<WagerTransaction | null>;
+  
+  /** PENDING_REFERENCE com próxima tentativa vencida. SEM lock: quem decide é quem trava a wallet e relê a transação. */
+  findDuePendingReference(now: Date, limit: number): Promise<Array<{ id: string; walletId: string }>>;
 
   /** REFUND/ROLLBACK já PROCESSED que reverteu a transação indicada (id interno), se houver. */
   findProcessedReversalOf(referenceTransactionId: string): Promise<WagerTransaction | null>;
@@ -80,4 +84,29 @@ export interface Clock {
 /** Gerador de ids (UUIDv7 em produção). O domínio nunca gera ids. */
 export interface IdGenerator {
   next(): string;
+}
+
+export interface OutboxRepository {
+  /** Insere imediatamente, na transação corrente (é isto que torna o evento atômico com o saldo). */
+  add(message: OutboxMessage): Promise<void>;
+  /**
+   * Pendentes e vencidas (next_attempt_at <= now), com FOR UPDATE SKIP LOCKED:
+   * dois relays nunca recebem a mesma linha, e um não espera o outro.
+   * Só funciona dentro de uma transação; o lock dura até o commit.
+   */
+  claimDue(now: Date, limit: number): Promise<OutboxMessage[]>;
+  /** Registra a mudança de uma mensagem obtida por `claimDue` NESTA transação. Descarregada no commit. */
+  save(message: OutboxMessage): void;
+}
+
+/** Entrega o evento ao broker. Resolver = o broker aceitou; lançar = tentar de novo depois. */
+export interface EventPublisher {
+  publish(message: OutboxMessage): Promise<void>;
+}
+
+export interface Repositories {
+  wallets: WalletRepository;
+  transactions: WagerTransactionRepository;
+  ledger: LedgerRepository;
+  outbox: OutboxRepository;
 }

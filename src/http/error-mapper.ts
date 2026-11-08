@@ -1,7 +1,7 @@
 import { HttpException } from '@nestjs/common';
 import { ConnectionException, DeadlockException, LockWaitTimeoutException } from '@mikro-orm/core';
 import {
-  ApplicationError, IdempotencyConflictError, InvalidRequestError, UnsupportedTransactionKindError,
+  ApplicationError, IdempotencyConflictError, InvalidRequestError,
   WalletAlreadyExistsError, WalletNotFoundError,
 } from '../application/errors';
 import { InvalidMoneyError, InvalidTransactionError } from '../domain/errors';
@@ -46,9 +46,6 @@ export function mapError(e: unknown): MappedError {
   }
   if (e instanceof WalletAlreadyExistsError || e instanceof IdempotencyConflictError) {
     return { status: 409, headers: {}, body: body(e.code, e.message) };
-  }
-  if (e instanceof UnsupportedTransactionKindError) {
-    return { status: 501, headers: {}, body: body(e.code, e.message) };
   }
   if (e instanceof DeadlockException || e instanceof LockWaitTimeoutException || e instanceof ConnectionException) {
     return {

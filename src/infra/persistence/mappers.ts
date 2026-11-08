@@ -5,7 +5,8 @@ import {
   WagerTransaction, WagerTransactionKind, WagerTransactionStatus,
 } from '../../domain/wager-transaction';
 import type { FailureCode } from '../../domain/failure-code';
-import { WagerTransactionRecord, WalletLedgerEntryRecord, WalletRecord } from './records';
+import { OutboxMessage } from '../../domain/outbox-message';
+import { WagerTransactionRecord, WalletLedgerEntryRecord, WalletRecord, OutboxMessageRecord} from './records';
 
 /**
  * Ponte domínio ⇄ persistência. Regras:
@@ -135,5 +136,37 @@ export function ledgerEntryToNewRecord(e: WalletLedgerEntry): WalletLedgerEntryR
   r.balanceBefore = amountOf(e.balanceBefore);
   r.balanceAfter = amountOf(e.balanceAfter);
   r.createdAt = e.createdAt;
+  return r;
+}
+
+export function outboxToDomain(r: OutboxMessageRecord): OutboxMessage {
+  return OutboxMessage.rehydrate({
+    id: r.id,
+    aggregateId: r.aggregateId,
+    eventType: r.eventType,
+    payload: r.payload,
+    occurredAt: r.occurredAt,
+    attempts: r.attempts,
+    nextAttemptAt: r.nextAttemptAt,
+    // OutboxMessageState tem `publishedAt?: Date` (sem `| undefined`): spread condicional por causa do exactOptionalPropertyTypes
+    ...(r.publishedAt !== null ? { publishedAt: r.publishedAt } : {}),
+  });
+}
+
+/** Só attempts, next_attempt_at e published_at mudam depois de criada. */
+export function applyOutboxToRecord(m: OutboxMessage, r: OutboxMessageRecord): void {
+  r.attempts = m.attempts;
+  r.nextAttemptAt = m.nextAttemptAt ?? m.occurredAt; // coluna é NOT NULL
+  r.publishedAt = m.publishedAt ?? null;
+}
+
+export function outboxToNewRecord(m: OutboxMessage): OutboxMessageRecord {
+  const r = new OutboxMessageRecord();
+  r.id = m.id;
+  r.aggregateId = m.aggregateId;
+  r.eventType = m.eventType;
+  r.payload = m.payload;
+  r.occurredAt = m.occurredAt;
+  applyOutboxToRecord(m, r);
   return r;
 }

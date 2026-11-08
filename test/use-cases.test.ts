@@ -11,7 +11,7 @@ import {
 } from '../src/application/process-wager-transaction.use-case';
 import type { SubmitTransactionCommand } from '../src/application/commands';
 import {
-  IdempotencyConflictError, UnsupportedTransactionKindError, WalletAlreadyExistsError, WalletNotFoundError,
+  IdempotencyConflictError, WalletAlreadyExistsError, WalletNotFoundError,
 } from '../src/application/errors';
 import { Money } from '../src/domain/money';
 import { FailureCode } from '../src/domain/failure-code';
@@ -144,7 +144,7 @@ describe('ProcessWagerTransaction: regras de negócio', () => {
     const w = await newWallet('100.00');
     const r = await processTx.execute(cmd(w, { kind: K.Win, amount: '25.50' }));
     expect(r.status).toBe(S.Processed);
-    expect(r.balance.amount).toBe('125.50');
+    expect(r.balance?.amount).toBe('125.50');
     expect(await ledgerOf(w.id)).toHaveLength(2);
   });
 
@@ -171,7 +171,7 @@ describe('ProcessWagerTransaction: regras de negócio', () => {
 
   test('BET exatamente igual ao saldo é aceita e zera a wallet', async () => {
     const w = await newWallet('80.00');
-    expect((await processTx.execute(cmd(w, { amount: '80.00' }))).balance.amount).toBe('0.00');
+    expect((await processTx.execute(cmd(w, { amount: '80.00' }))).balance?.amount).toBe('0.00');
   });
 
   test('jogador diferente do dono da wallet: REJECTED com WALLET_PLAYER_MISMATCH', async () => {
@@ -199,13 +199,16 @@ describe('ProcessWagerTransaction: regras de negócio', () => {
     expect(rows[0].n).toBe(0);
   });
 
-  test('REFUND e ROLLBACK ainda não são suportados (erro claro, nada persistido)', async () => {
+  test('REFUND de uma BET PROCESSED credita de volta (smoke; detalhamento em reversals.test.ts)', async () => {
     const w = await newWallet('100.00');
-    for (const kind of [K.Refund, K.Rollback] as const) {
-      const c = { ...cmd(w, { kind }), referenceExternalTransactionId: 'ext-qualquer' };
-      await expect(processTx.execute(c)).rejects.toThrow(UnsupportedTransactionKindError);
-    }
-    expect(await countTransactions(w.id, { kind: 'REFUND' })).toBe(0);
+    const bet = cmd(w, { amount: '30.00', externalId: `ext-bet-${randomUUID()}` });
+    const betResult = await processTx.execute(bet);
+    expect(betResult).toMatchObject({ status: S.Processed, balance: { amount: '70.00', currency: 'BRL' } });
+
+    const refund = { ...cmd(w, { kind: K.Refund, amount: '30.00' }), referenceExternalTransactionId: bet.externalTransactionId };
+    const refundResult = await processTx.execute(refund);
+    expect(refundResult).toMatchObject({ status: S.Processed, balance: { amount: '100.00', currency: 'BRL' } });
+    expect(await countTransactions(w.id, { kind: 'REFUND', status: 'PROCESSED' })).toBe(1);
   });
 });
 
@@ -224,12 +227,12 @@ describe('ProcessWagerTransaction: idempotência', () => {
   test('o replay devolve o saldo DA ÉPOCA, não o saldo atual', async () => {
     const w = await newWallet('100.00');
     const first = cmd(w, { amount: '30.00' });
-    expect((await processTx.execute(first)).balance.amount).toBe('70.00');
+    expect((await processTx.execute(first)).balance?.amount).toBe('70.00');
     await processTx.execute(cmd(w, { amount: '20.00' })); // saldo atual agora é 50.00
     expect(await balanceOf(w)).toBe('50.00');
 
     const replay = await processTx.execute(first);
-    expect(replay.balance.amount).toBe('70.00'); // o da época
+    expect(replay.balance?.amount).toBe('70.00'); // o da época
     expect(replay.idempotentReplay).toBe(true);
   });
 
@@ -250,7 +253,7 @@ describe('ProcessWagerTransaction: idempotência', () => {
     const c = cmd(w, { kind: K.Loss, amount: '10.00' });
     await processTx.execute(c);
     await processTx.execute(cmd(w, { amount: '40.00' }));
-    expect((await processTx.execute(c)).balance.amount).toBe('100.00');
+    expect((await processTx.execute(c)).balance?.amount).toBe('100.00');
   });
 
   test('"25" e "25.00" com a mesma chave são o MESMO payload (replay, não conflito)', async () => {
@@ -322,7 +325,7 @@ describe('ProcessWagerTransaction: concorrência', () => {
     expect(new Set(results.map((r) => r.transactionId)).size).toBe(1);
     expect(results.filter((r) => !r.idempotentReplay)).toHaveLength(1);
     expect(results.filter((r) => r.idempotentReplay)).toHaveLength(49);
-    expect(new Set(results.map((r) => r.balance.amount))).toEqual(new Set(['75.00']));
+    expect(new Set(results.map((r) => r.balance?.amount))).toEqual(new Set(['75.00']));
     expect(await debits(w)).toHaveLength(1);
     expect(await countTransactions(w.id, { kind: 'BET' })).toBe(1);
   }, 30_000);
